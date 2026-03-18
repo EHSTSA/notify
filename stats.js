@@ -17,34 +17,49 @@ const loadingState = document.getElementById("loadingState");
 const emptyState = document.getElementById("emptyState");
 const statsContent = document.getElementById("statsContent");
 const summaryTableBody = document.getElementById("summaryTableBody");
+const barCanvas = document.getElementById("barChart");
+const scatterCanvas = document.getElementById("scatterChart");
 
 let selectedDays = 7;
 let barChart = null;
 let scatterChart = null;
+let latestRows = [];
 
 const theme = localStorage.getItem("audio-detector-theme") || "light";
 document.body.classList.toggle("dark", theme === "dark");
-darkSetting.checked = theme === "dark";
 
-darkSetting.addEventListener("change", () => {
-  const isDark = darkSetting.checked;
-  document.body.classList.toggle("dark", isDark);
-  localStorage.setItem("audio-detector-theme", isDark ? "dark" : "light");
-  if (!statsContent.hidden) renderCharts(window.__statsRows || []);
-});
+if (darkSetting) {
+  darkSetting.checked = theme === "dark";
 
-signOutBtn.addEventListener("click", async () => {
-  await signOut(auth);
-  window.location.href = "index.html";
-});
+  darkSetting.addEventListener("change", () => {
+    const isDark = darkSetting.checked;
+    document.body.classList.toggle("dark", isDark);
+    localStorage.setItem("audio-detector-theme", isDark ? "dark" : "light");
+
+    if (!statsContent.hidden && latestRows.length > 0) {
+      renderCharts(latestRows);
+    }
+  });
+}
+
+if (signOutBtn) {
+  signOutBtn.addEventListener("click", async () => {
+    await signOut(auth);
+    window.location.href = "index.html";
+  });
+}
 
 filterButtons.forEach((button) => {
   button.addEventListener("click", () => {
     const days = Number(button.dataset.days);
     if (days === selectedDays) return;
+
     selectedDays = days;
     filterButtons.forEach((btn) => btn.classList.toggle("active", btn === button));
-    if (auth.currentUser) loadStats(auth.currentUser.uid);
+
+    if (auth.currentUser) {
+      loadStats(auth.currentUser.uid);
+    }
   });
 });
 
@@ -54,7 +69,10 @@ onAuthStateChanged(auth, (user) => {
     return;
   }
 
-  userEmailEl.textContent = user.email || "Signed in";
+  if (userEmailEl) {
+    userEmailEl.textContent = user.email || "Signed in";
+  }
+
   loadStats(user.uid);
 });
 
@@ -72,20 +90,26 @@ async function loadStats(userId) {
     );
 
     const snapshot = await getDocs(eventsQuery);
+
     const rows = snapshot.docs
       .map((doc) => {
         const data = doc.data();
         const detectedAt = data.detectedAt?.toDate?.();
-        if (!detectedAt) return null;
+
+        if (!detectedAt || Number.isNaN(detectedAt.getTime())) {
+          return null;
+        }
+
         return {
           id: doc.id,
-          soundLabel: data.soundLabel || "Unknown",
-          confidence: Number(data.confidence || 0),
+          soundLabel: String(data.soundLabel || "Unknown"),
+          confidence: clamp(Number(data.confidence ?? 0), 0, 1),
           detectedAt,
         };
       })
       .filter(Boolean);
 
+    latestRows = rows;
     window.__statsRows = rows;
 
     if (rows.length === 0) {
@@ -100,8 +124,13 @@ async function loadStats(userId) {
     setState("content");
   } catch (error) {
     console.error("Failed to load stats:", error);
+    latestRows = [];
     destroyCharts();
-    summaryTableBody.innerHTML = `<tr><td colspan="4">Failed to load stats: ${escapeHtml(error.message || "Unknown error")}</td></tr>`;
+    summaryTableBody.innerHTML = `
+      <tr>
+        <td colspan="4">Failed to load stats: ${escapeHtml(error.message || "Unknown error")}</td>
+      </tr>
+    `;
     setState("content");
   }
 }
@@ -113,6 +142,16 @@ function setState(state) {
 }
 
 function renderCharts(rows) {
+  if (typeof Chart === "undefined") {
+    console.error("Chart.js is not loaded.");
+    summaryTableBody.innerHTML = `
+      <tr>
+        <td colspan="4">Chart.js failed to load, so the charts cannot be displayed.</td>
+      </tr>
+    `;
+    return;
+  }
+
   const summary = buildSummary(rows);
   renderBarChart(summary);
   renderScatterChart(rows, summary.labels);
@@ -121,7 +160,7 @@ function renderCharts(rows) {
 function buildSummary(rows) {
   const map = new Map();
 
-  rows.forEach((row) => {
+  for (const row of rows) {
     const existing = map.get(row.soundLabel) || {
       soundLabel: row.soundLabel,
       count: 0,
@@ -131,13 +170,18 @@ function buildSummary(rows) {
 
     existing.count += 1;
     existing.confidenceSum += row.confidence;
+
     if (row.detectedAt > existing.lastDetected) {
       existing.lastDetected = row.detectedAt;
     }
-    map.set(row.soundLabel, existing);
-  });
 
-  const items = [...map.values()].sort((a, b) => b.count - a.count || a.soundLabel.localeCompare(b.soundLabel));
+    map.set(row.soundLabel, existing);
+  }
+
+  const items = [...map.values()].sort(
+    (a, b) => b.count - a.count || a.soundLabel.localeCompare(b.soundLabel)
+  );
+
   return {
     items,
     labels: items.map((item) => item.soundLabel),
@@ -145,58 +189,99 @@ function buildSummary(rows) {
 }
 
 function renderBarChart(summary) {
-  const ctx = document.getElementById("barChart");
-  if (barChart) barChart.destroy();
+  if (!barCanvas) return;
 
-  barChart = new Chart(ctx, {
+  if (barChart) {
+    barChart.destroy();
+    barChart = null;
+  }
+
+  barChart = new Chart(barCanvas, {
     type: "bar",
     data: {
       labels: summary.items.map((item) => item.soundLabel),
-      datasets: [{
-        label: "Detections",
-        data: summary.items.map((item) => item.count),
-        borderWidth: 1,
-        borderRadius: 8,
-      }],
+      datasets: [
+        {
+          label: "Detections",
+          data: summary.items.map((item) => item.count),
+          borderWidth: 1,
+          borderRadius: 8,
+        },
+      ],
     },
     options: chartOptions({
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label(context) {
+              return `Detections: ${context.raw}`;
+            },
+          },
+        },
+      },
       scales: {
         x: {
-          ticks: { maxRotation: 0, autoSkip: false },
+          ticks: {
+            maxRotation: 0,
+            minRotation: 0,
+            autoSkip: false,
+          },
+          title: {
+            display: true,
+            text: "Sound label",
+          },
         },
         y: {
           beginAtZero: true,
-          ticks: { precision: 0 },
+          ticks: {
+            precision: 0,
+          },
+          title: {
+            display: true,
+            text: "Detection count",
+          },
         },
-      },
-      plugins: {
-        legend: { display: false },
       },
     }),
   });
 }
 
 function renderScatterChart(rows, labels) {
-  const ctx = document.getElementById("scatterChart");
-  if (scatterChart) scatterChart.destroy();
+  if (!scatterCanvas) return;
+
+  if (scatterChart) {
+    scatterChart.destroy();
+    scatterChart = null;
+  }
 
   const labelIndex = new Map(labels.map((label, index) => [label, index]));
-  const points = rows.map((row) => ({
-    x: row.detectedAt.getHours() + row.detectedAt.getMinutes() / 60,
-    y: labelIndex.get(row.soundLabel),
-    r: 4 + row.confidence * 12,
-    soundLabel: row.soundLabel,
-    confidence: row.confidence,
-    detectedAt: row.detectedAt,
-  }));
 
-  scatterChart = new Chart(ctx, {
+  const points = rows
+    .map((row) => {
+      const yIndex = labelIndex.get(row.soundLabel);
+      if (yIndex == null) return null;
+
+      return {
+        x: row.detectedAt.getHours() + row.detectedAt.getMinutes() / 60,
+        y: yIndex,
+        r: 4 + row.confidence * 12,
+        soundLabel: row.soundLabel,
+        confidence: row.confidence,
+        detectedAt: row.detectedAt,
+      };
+    })
+    .filter(Boolean);
+
+  scatterChart = new Chart(scatterCanvas, {
     type: "bubble",
     data: {
-      datasets: [{
-        label: "Detections",
-        data: points,
-      }],
+      datasets: [
+        {
+          label: "Detections",
+          data: points,
+        },
+      ],
     },
     options: chartOptions({
       parsing: false,
@@ -214,10 +299,10 @@ function renderScatterChart(rows, labels) {
       scales: {
         x: {
           min: 0,
-          max: 23,
+          max: 24,
           ticks: {
             stepSize: 1,
-            callback: (value) => `${value}:00`,
+            callback: (value) => `${Math.floor(value)}:00`,
           },
           title: {
             display: true,
@@ -229,7 +314,10 @@ function renderScatterChart(rows, labels) {
           max: Math.max(labels.length - 0.5, 0.5),
           ticks: {
             stepSize: 1,
-            callback: (value) => labels[value] || "",
+            callback: (value) => {
+              const index = Math.round(value);
+              return labels[index] || "";
+            },
           },
           title: {
             display: true,
@@ -243,14 +331,16 @@ function renderScatterChart(rows, labels) {
 
 function renderSummaryTable(rows) {
   const summary = buildSummary(rows);
+
   summaryTableBody.innerHTML = summary.items
     .map((item) => {
       const avgConfidence = item.confidenceSum / item.count;
+
       return `
         <tr>
           <td>${escapeHtml(item.soundLabel)}</td>
           <td>${item.count}</td>
-          <td>${item.lastDetected.toLocaleString()}</td>
+          <td>${escapeHtml(item.lastDetected.toLocaleString())}</td>
           <td>${avgConfidence.toFixed(3)}</td>
         </tr>
       `;
@@ -263,33 +353,37 @@ function chartOptions(extra = {}) {
   const tickColor = isDark ? "#cbd5e1" : "#475569";
   const gridColor = isDark ? "rgba(148, 163, 184, 0.15)" : "rgba(15, 23, 42, 0.08)";
 
+  const mergedScales = {};
+  const inputScales = extra.scales || {};
+
+  for (const [key, config] of Object.entries(inputScales)) {
+    mergedScales[key] = {
+      grid: { color: gridColor },
+      ticks: { color: tickColor, ...(config.ticks || {}) },
+      title: { color: tickColor, ...(config.title || {}) },
+      ...config,
+    };
+  }
+
   return {
     responsive: true,
     maintainAspectRatio: false,
     animation: false,
-    scales: {},
+    scales: mergedScales,
     plugins: {
       legend: {
         labels: { color: tickColor },
       },
+      ...(extra.plugins || {}),
     },
     elements: {
       point: {
         hoverRadius: 10,
       },
+      ...(extra.elements || {}),
     },
     ...extra,
-    scales: Object.fromEntries(
-      Object.entries(extra.scales || {}).map(([key, config]) => [
-        key,
-        {
-          grid: { color: gridColor },
-          ticks: { color: tickColor, ...(config.ticks || {}) },
-          title: { color: tickColor, ...(config.title || {}) },
-          ...config,
-        },
-      ])
-    ),
+    scales: mergedScales,
   };
 }
 
@@ -298,10 +392,15 @@ function destroyCharts() {
     barChart.destroy();
     barChart = null;
   }
+
   if (scatterChart) {
     scatterChart.destroy();
     scatterChart = null;
   }
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
 }
 
 function escapeHtml(value) {
