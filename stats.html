@@ -2,88 +2,100 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Audio Detector Stats</title>
+  <title>Audio Detector - Stats</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div class="stats-page">
-    <div class="shell shell-wide">
-      <div class="header">
-        <h1>Detection Stats</h1>
-        <div class="header-actions">
-          <nav class="top-nav" aria-label="Primary">
-            <a class="top-nav-link" href="index.html">Detector</a>
-            <a class="top-nav-link active" href="stats.html">Stats</a>
-          </nav>
-          <label class="toggle-wrap">
-            Dark
-            <label class="toggle">
-              <input type="checkbox" id="darkSetting">
-              <span class="toggle-slider"></span>
-            </label>
+  <div class="shell">
+    <div class="header">
+      <h1>Audio Detector</h1>
+      <div class="header-actions">
+        <nav class="top-nav" aria-label="Primary">
+          <a class="top-nav-link" href="index.html">Detector</a>
+          <a class="top-nav-link active" href="stats.html">Stats</a>
+        </nav>
+        <label class="toggle-wrap">
+          Dark
+          <label class="toggle">
+            <input type="checkbox" id="darkSetting" />
+            <span class="toggle-slider"></span>
           </label>
+        </label>
+      </div>
+    </div>
+
+    <div class="user-bar">
+      <span class="user-bar-email" id="userEmail"></span>
+      <button class="btn-sign-out" id="signOutBtn">Sign out</button>
+    </div>
+
+    <div class="status-card" style="margin-bottom:16px;">
+      <div class="status-info" style="width:100%;">
+        <div class="status-label">Date Range</div>
+        <div class="controls" style="margin-top:10px;">
+          <button class="btn btn-secondary filter-btn" data-days="1">1d</button>
+          <button class="btn btn-primary filter-btn active" data-days="7">7d</button>
+          <button class="btn btn-secondary filter-btn" data-days="30">30d</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="loadingState" class="status-card">
+      <div class="status-info">
+        <div class="status-label">Loading</div>
+        <div class="status-value">Loading detections…</div>
+      </div>
+    </div>
+
+    <div id="emptyState" class="status-card" hidden>
+      <div class="status-info">
+        <div class="status-label">No Data</div>
+        <div class="status-value">No detections in this period</div>
+      </div>
+    </div>
+
+    <div id="statsContent" hidden>
+      <div class="log-card" style="margin-bottom:16px;">
+        <div class="log-header">
+          <span class="log-title">Top Sounds by Frequency</span>
+        </div>
+        <div style="height:320px; padding:12px 4px;">
+          <canvas id="barChart"></canvas>
         </div>
       </div>
 
-      <div class="user-bar">
-        <span class="user-bar-email" id="userEmail">Checking sign-in…</span>
-        <div class="user-bar-actions">
-          <a class="btn-sign-out stats-back-link" href="index.html">Back to Detector</a>
-          <button class="btn-sign-out" id="signOutBtn">Sign out</button>
+      <div class="log-card" style="margin-bottom:16px;">
+        <div class="log-header">
+          <span class="log-title">Detection Timeline</span>
+        </div>
+        <div style="height:360px; padding:12px 4px;">
+          <canvas id="scatterChart"></canvas>
         </div>
       </div>
 
-      <div class="filter-row" role="tablist" aria-label="Date filters">
-        <button class="filter-btn active" data-days="1">1d</button>
-        <button class="filter-btn" data-days="7">7d</button>
-        <button class="filter-btn" data-days="30">30d</button>
-      </div>
-
-      <div class="stats-loading" id="loadingState">
-        <div class="spinner"></div>
-        <div>Loading detections…</div>
-      </div>
-
-      <div class="stats-empty" id="emptyState" hidden>No detections in this period</div>
-
-      <div class="stats-content" id="statsContent" hidden>
-        <div class="chart-card">
-          <div class="chart-title">Top sounds by frequency</div>
-          <div class="chart-wrap bar-wrap">
-            <canvas id="barChart"></canvas>
-          </div>
+      <div class="log-card">
+        <div class="log-header">
+          <span class="log-title">Summary</span>
         </div>
-
-        <div class="chart-card">
-          <div class="chart-title">Detection timeline by hour</div>
-          <div class="chart-subtitle">Dot size scales with confidence</div>
-          <div class="chart-wrap scatter-wrap">
-            <canvas id="scatterChart"></canvas>
-          </div>
-        </div>
-
-        <div class="chart-card">
-          <div class="chart-title">Summary</div>
-          <div class="table-wrap">
-            <table class="summary-table">
-              <thead>
-                <tr>
-                  <th>Sound Label</th>
-                  <th>Count</th>
-                  <th>Last Detected</th>
-                  <th>Avg Confidence</th>
-                </tr>
-              </thead>
-              <tbody id="summaryTableBody"></tbody>
-            </table>
-          </div>
+        <div style="overflow-x:auto;">
+          <table style="width:100%; border-collapse:collapse;">
+            <thead>
+              <tr>
+                <th style="text-align:left; padding:12px;">Sound Label</th>
+                <th style="text-align:left; padding:12px;">Count</th>
+                <th style="text-align:left; padding:12px;">Last Detected</th>
+                <th style="text-align:left; padding:12px;">Avg Confidence</th>
+              </tr>
+            </thead>
+            <tbody id="summaryTableBody"></tbody>
+          </table>
         </div>
       </div>
     </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script type="module" src="stats.js"></script>
 </body>
 </html>
