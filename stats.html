@@ -7,95 +7,78 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
+
   <div class="shell">
+
+    <!-- Header -->
     <div class="header">
       <h1>Audio Detector</h1>
       <div class="header-actions">
-        <nav class="top-nav" aria-label="Primary">
+        <nav class="top-nav">
           <a class="top-nav-link" href="index.html">Detector</a>
           <a class="top-nav-link active" href="stats.html">Stats</a>
         </nav>
-        <label class="toggle-wrap">
-          Dark
-          <label class="toggle">
-            <input type="checkbox" id="darkSetting" />
-            <span class="toggle-slider"></span>
-          </label>
-        </label>
       </div>
     </div>
 
+    <!-- User bar -->
     <div class="user-bar">
-      <span class="user-bar-email" id="userEmail"></span>
-      <button class="btn-sign-out" id="signOutBtn">Sign out</button>
+      <span id="userEmail"></span>
+      <button id="signOutBtn">Sign out</button>
     </div>
 
-    <div class="status-card" style="margin-bottom:16px;">
-      <div class="status-info" style="width:100%;">
-        <div class="status-label">Date Range</div>
-        <div class="controls" style="margin-top:10px;">
-          <button class="btn btn-secondary filter-btn" data-days="1">1d</button>
-          <button class="btn btn-primary filter-btn active" data-days="7">7d</button>
-          <button class="btn btn-secondary filter-btn" data-days="30">30d</button>
-        </div>
-      </div>
+    <!-- Filter buttons -->
+    <div style="margin:16px 0;">
+      <button class="filter-btn" data-days="1">1d</button>
+      <button class="filter-btn active" data-days="7">7d</button>
+      <button class="filter-btn" data-days="30">30d</button>
     </div>
 
-    <div id="loadingState" class="status-card">
-      <div class="status-info">
-        <div class="status-label">Loading</div>
-        <div class="status-value">Loading detections…</div>
-      </div>
+    <!-- Loading -->
+    <div id="loadingState">
+      Loading detections…
     </div>
 
-    <div id="emptyState" class="status-card" hidden>
-      <div class="status-info">
-        <div class="status-label">No Data</div>
-        <div class="status-value">No detections in this period</div>
-      </div>
+    <!-- Empty -->
+    <div id="emptyState" hidden>
+      No detections in this period
     </div>
 
+    <!-- Main content -->
     <div id="statsContent" hidden>
-      <div class="log-card" style="margin-bottom:16px;">
-        <div class="log-header">
-          <span class="log-title">Top Sounds by Frequency</span>
-        </div>
-        <div style="height:320px; padding:12px 4px;">
-          <canvas id="barChart"></canvas>
-        </div>
+
+      <!-- Bar chart -->
+      <div style="height:300px;">
+        <canvas id="barChart"></canvas>
       </div>
 
-      <div class="log-card" style="margin-bottom:16px;">
-        <div class="log-header">
-          <span class="log-title">Detection Timeline</span>
-        </div>
-        <div style="height:360px; padding:12px 4px;">
-          <canvas id="scatterChart"></canvas>
-        </div>
+      <!-- Scatter chart -->
+      <div style="height:300px; margin-top:20px;">
+        <canvas id="scatterChart"></canvas>
       </div>
 
-      <div class="log-card">
-        <div class="log-header">
-          <span class="log-title">Summary</span>
-        </div>
-        <div style="overflow-x:auto;">
-          <table style="width:100%; border-collapse:collapse;">
-            <thead>
-              <tr>
-                <th style="text-align:left; padding:12px;">Sound Label</th>
-                <th style="text-align:left; padding:12px;">Count</th>
-                <th style="text-align:left; padding:12px;">Last Detected</th>
-                <th style="text-align:left; padding:12px;">Avg Confidence</th>
-              </tr>
-            </thead>
-            <tbody id="summaryTableBody"></tbody>
-          </table>
-        </div>
-      </div>
+      <!-- Summary table -->
+      <table style="margin-top:20px; width:100%;">
+        <thead>
+          <tr>
+            <th>Sound Label</th>
+            <th>Count</th>
+            <th>Last Detected</th>
+            <th>Avg Confidence</th>
+          </tr>
+        </thead>
+        <tbody id="summaryTableBody"></tbody>
+      </table>
+
     </div>
+
   </div>
 
+  <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- Stats logic -->
   <script type="module" src="stats.js"></script>
+
 </body>
 </html>
