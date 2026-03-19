@@ -1,6 +1,6 @@
 Sound Detection and Notification System
 
-Team 211882-3: Saamik Agrawal, Shivam Chowdhary, and Yash Nagarahalli
+Team 211882-3: 
 
 The Problem
 
