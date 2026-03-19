@@ -11,7 +11,9 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-firestore.js";
 import { auth, db } from "./firebase.js";
 
-// ── EmailJS ───────────────────────────────────────────────────────────────────
+// ── EmailJS config ───────────────────────────────────────────────────────────
+// Uses Resend under the hood via EmailJS — fires off an email when a sound
+// is detected and the user has email alerts turned on in settings.
 const EMAILJS_SERVICE_ID = "TSA-Sound-Detector";
 const EMAILJS_TEMPLATE_ID = "template_fa9wwjj";
 
@@ -58,6 +60,7 @@ const signUpBtn = document.getElementById("signUpBtn");
 const signOutBtn = document.getElementById("signOutBtn");
 
 // ── Auth helpers ──────────────────────────────────────────────────────────────
+// Thin wrappers so we don't repeat the same show/hide/error logic everywhere.
 function authErr(msg) {
   authErrorEl.textContent = msg;
   authErrorEl.style.display = msg ? "block" : "none";
@@ -146,23 +149,31 @@ onAuthStateChanged(auth, user => {
   }
 });
 
-// ── Sounds ────────────────────────────────────────────────────────────────────
+// ── Sound definitions ────────────────────────────────────────────────────────
+// Each entry maps one or more YAMNet class indices to a single user-facing label.
+// We merge classes that mean the same thing in practice (e.g. smoke detector,
+// siren, and buzzer all just mean "fire alarm is going off") so the user gets
+// one clear alert instead of three confusing ones.
+//
+// idx values are YAMNet's 521-class output indices — see the class map at
+// https://github.com/tensorflow/models/blob/master/research/audioset/yamnet/yamnet_class_map.csv
 const SOUNDS = [
-  { id: "smoke", idx: [396, 397], label: "Smoke Detector", emoji: "🚨", tier: "danger", notif: "Smoke detector going off!" },
-  { id: "siren", idx: [388, 389, 390], label: "Siren", emoji: "🚨", tier: "danger", notif: "Siren detected nearby." },
-  { id: "glass", idx: [60, 61], label: "Glass Shatter", emoji: "💥", tier: "danger", notif: "Glass breaking detected!" },
-  { id: "baby", idx: [14, 15], label: "Baby Crying", emoji: "👶", tier: "warn", notif: "Baby crying detected." },
-  { id: "vehhorn", idx: [325, 326], label: "Vehicle Horn", emoji: "📯", tier: "warn", notif: "Vehicle horn detected." },
-  { id: "trainhorn", idx: [302, 303], label: "Train Horn", emoji: "🚂", tier: "warn", notif: "Train horn detected." },
-  { id: "reversing", idx: [329], label: "Reversing Beeps", emoji: "🔁", tier: "warn", notif: "Reversing vehicle detected." },
-  { id: "doorbell", idx: [379, 380], label: "Doorbell", emoji: "🔔", tier: "info", notif: "Someone rang the doorbell." },
-  { id: "knock", idx: [382], label: "Knock", emoji: "✊", tier: "info", notif: "Knock at the door detected." },
-  { id: "phone", idx: [400, 401], label: "Telephone Ringing", emoji: "📞", tier: "info", notif: "Telephone ringing." },
-  { id: "alarm", idx: [393, 394], label: "Alarm Clock", emoji: "⏰", tier: "info", notif: "Alarm clock going off." },
-  { id: "buzzer", idx: [398], label: "Buzzer", emoji: "📳", tier: "info", notif: "Buzzer detected." },
-  { id: "microwave", idx: [375], label: "Microwave", emoji: "📡", tier: "info", notif: "Microwave beep detected." },
-  { id: "dog", idx: [74, 75, 76], label: "Dog Barking", emoji: "🐕", tier: "info", notif: "Dog barking detected." },
-  { id: "vacuum", idx: [373], label: "Vacuum Cleaner", emoji: "🌀", tier: "info", notif: "Vacuum cleaner detected." },
+  // --- danger: things you need to act on immediately ---
+  { id: "firealarm", idx: [396, 397, 388, 389, 390, 398], label: "Fire Alarm", emoji: "🚨", tier: "danger", notif: "Fire alarm detected — check your surroundings!" },
+  { id: "glass",     idx: [60, 61],                       label: "Glass Shatter", emoji: "💥", tier: "danger", notif: "Glass breaking detected!" },
+
+  // --- warn: not life-threatening but you should know ---
+  { id: "baby",      idx: [14, 15],              label: "Baby Crying", emoji: "👶", tier: "warn", notif: "Baby crying detected." },
+  { id: "horn",      idx: [325, 326, 302, 303],  label: "Horn",        emoji: "📯", tier: "warn", notif: "Horn detected nearby." },
+  { id: "reversing", idx: [329],                  label: "Reversing Beeps", emoji: "🔁", tier: "warn", notif: "Reversing vehicle detected." },
+
+  // --- info: everyday sounds worth surfacing ---
+  { id: "door",      idx: [379, 380, 382],  label: "Door",              emoji: "🔔", tier: "info", notif: "Someone's at the door." },
+  { id: "phone",     idx: [400, 401],        label: "Telephone Ringing", emoji: "📞", tier: "info", notif: "Telephone ringing." },
+  { id: "alarm",     idx: [393, 394],        label: "Alarm Clock",       emoji: "⏰", tier: "info", notif: "Alarm clock going off." },
+  { id: "microwave", idx: [375],             label: "Microwave",         emoji: "📡", tier: "info", notif: "Microwave beep detected." },
+  { id: "dog",       idx: [74, 75, 76],      label: "Dog Barking",       emoji: "🐕", tier: "info", notif: "Dog barking detected." },
+  { id: "vacuum",    idx: [373],             label: "Vacuum Cleaner",    emoji: "🌀", tier: "info", notif: "Vacuum cleaner detected." },
 ];
 
 const enabled = Object.fromEntries(SOUNDS.map(s => [s.id, true]));
@@ -273,6 +284,8 @@ async function notify(sound) {
   }
 }
 
+// Quick audio cue so the user knows something was detected even if they're
+// not looking at the screen. Higher pitch + harsher waveform for danger.
 function beep(tier) {
   try {
     if (!audioCtx || audioCtx.state === "closed") return;
@@ -314,7 +327,11 @@ async function saveSoundEvent(sound, score) {
   }
 }
 
-// ── YAMNet ────────────────────────────────────────────────────────────────────
+// ── YAMNet inference pipeline ─────────────────────────────────────────────────
+// YAMNet expects mono 16 kHz audio. Most mics run at 44.1/48 kHz so we
+// resample on the fly. We grab 1.5s windows every 750ms (overlapping) to
+// balance latency vs. accuracy, and debounce detections with a 3s cooldown
+// so we don't spam the user with the same alert.
 const YAMNET_SR = 16000;
 const WINDOW_S = 1.5;
 const POLL_MS = 750;
@@ -338,10 +355,13 @@ async function loadModel() {
   statusEl.textContent = "Loading YAMNet…";
   addLog("Fetching YAMNet from TF Hub…");
   model = await window.tf.loadGraphModel(MODEL_URL, { fromTFHub: true });
-  addLog("YAMNet ready — 15 sound classes active.");
+  addLog("YAMNet ready — 11 sound classes active.");
   statusEl.textContent = "Ready";
 }
 
+// Resample from the mic's native rate down to 16 kHz for YAMNet.
+// Uses OfflineAudioContext which handles the interpolation for us —
+// way simpler (and better quality) than doing it manually.
 async function resample(buf, fromSR) {
   if (fromSR === YAMNET_SR) return buf;
 
@@ -360,6 +380,12 @@ async function resample(buf, fromSR) {
   return (await dst.startRendering()).getChannelData(0);
 }
 
+// Core detection loop — runs every POLL_MS while listening.
+// Grabs the latest audio window, feeds it through YAMNet, and checks if any
+// of our monitored classes scored above the threshold. Because we merged
+// related YAMNet classes (e.g. siren + smoke detector → "Fire Alarm"),
+// we take the max score across all indices in a group so any one of them
+// firing is enough to trigger the alert.
 async function runInference() {
   if (!model || !listening) return;
 
@@ -371,9 +397,11 @@ async function runInference() {
   let wv, s0, sm, arr;
   try {
     const s16 = await resample(snap, nativeSR);
+    // clamp to [-1, 1] — occasional mic spikes can push values out of range
     const cl = s16.map(v => Math.max(-1, Math.min(1, v)));
     wv = window.tf.tensor1d(cl);
     const out = model.execute({ waveform: wv });
+    // YAMNet can return multiple frames; average them into one 521-d vector
     s0 = Array.isArray(out) ? out[0] : out;
     sm = window.tf.mean(s0, 0);
     arr = await sm.array();
@@ -381,6 +409,7 @@ async function runInference() {
     addLog("Inference error: " + e.message);
     return;
   } finally {
+    // always clean up tensors to avoid memory leaks
     wv?.dispose();
     s0?.dispose();
     sm?.dispose();
@@ -389,14 +418,17 @@ async function runInference() {
   const now = Date.now();
   if (now - lastHit <= COOLDOWN) return;
 
+  // helpful for debugging — shows raw top-5 classes in console
   const top5 = arr.map((v, i) => [i, v]).sort((a, b) => b[1] - a[1]).slice(0, 5);
   console.log("Top-5 YAMNet:", top5.map(([i, v]) => `[${i}] ${v.toFixed(3)}`).join("  "));
 
+  // find the highest-scoring enabled sound across all our merged class groups
   let best = null;
   let bestScore = 0;
 
   for (const s of SOUNDS) {
     if (!enabled[s.id]) continue;
+    // max across all indices in this group — any one class can trigger the alert
     const sc = Math.max(...s.idx.map(i => arr[i] ?? 0));
     if (sc >= THRESHOLD && sc > bestScore) {
       best = s;
@@ -416,6 +448,10 @@ async function runInference() {
   }
 }
 
+// Spin up the mic, wire it into a ScriptProcessor that feeds our sample buffer,
+// and kick off the inference loop. We disable all browser audio processing
+// (echo cancel, noise suppression, AGC) because YAMNet needs the raw signal —
+// those filters can mangle the frequencies we're trying to classify.
 async function startListening() {
   if (!model) await loadModel();
   if (listening) return;
@@ -449,9 +485,12 @@ async function startListening() {
 
     srcNode = audioCtx.createMediaStreamSource(stream);
     procNode = audioCtx.createScriptProcessor(4096, 1, 1);
+
+    // route through a silent gain node so audio doesn't play through speakers
     silentGain = audioCtx.createGain();
     silentGain.gain.value = 0;
 
+    // keep a rolling buffer of ~6 seconds of audio
     const maxBuf = nativeSR * 6;
     procNode.onaudioprocess = e => {
       const chunk = e.inputBuffer.getChannelData(0);
@@ -480,6 +519,9 @@ async function startListening() {
   }
 }
 
+// Tear down everything — stop mic, kill timers, disconnect audio graph.
+// Each disconnect is wrapped in try/catch because some nodes may already
+// be disconnected if the browser recycled the context.
 function stopListening() {
   clearInterval(timer);
   timer = null;
@@ -528,6 +570,8 @@ function stopListening() {
 startBtn.onclick = startListening;
 stopBtn.onclick = stopListening;
 
+// Visual flash for deaf/HoH users — briefly whites out the screen so it's
+// impossible to miss even in peripheral vision.
 async function flashScreen(times = 3) {
   const overlay = document.getElementById("flashOverlay");
   if (!overlay) return;
