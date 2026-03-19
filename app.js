@@ -168,7 +168,7 @@ const SOUNDS = [
   { id: "reversing", idx: [329],                  label: "Reversing Beeps", emoji: "🔁", tier: "warn", notif: "Reversing vehicle detected." },
 
   // --- info: everyday sounds worth surfacing ---
-  { id: "door",      idx: [379, 380, 382],  label: "Door",              emoji: "🔔", tier: "info", notif: "Someone's at the door." },
+  { id: "doorbell",  idx: [379, 380],  label: "Doorbell",          emoji: "🔔", tier: "info", notif: "Someone rang the doorbell." },
   { id: "phone",     idx: [400, 401],        label: "Telephone Ringing", emoji: "📞", tier: "info", notif: "Telephone ringing." },
   { id: "alarm",     idx: [393, 394],        label: "Alarm Clock",       emoji: "⏰", tier: "info", notif: "Alarm clock going off." },
   { id: "microwave", idx: [375],             label: "Microwave",         emoji: "📡", tier: "info", notif: "Microwave beep detected." },
